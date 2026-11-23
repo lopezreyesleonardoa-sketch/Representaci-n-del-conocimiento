@@ -1,0 +1,732 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simulador de monitoreo de senderos</title>
+<style>
+:root{--bg:#0b1512;--panel:#14231e;--panel2:#1b3028;--line:#2d493d;--text:#edf5ef;--muted:#a8b9ad;--green:#45cf83;--yellow:#f2c451;--red:#f06b68;--blue:#71b9e8}
+*{box-sizing:border-box}
+body{margin:0;background:linear-gradient(145deg,#0a1511,#10231b 55%,#0b1713);color:var(--text);font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Arial}
+header{padding:24px clamp(16px,4vw,42px) 18px;border-bottom:1px solid var(--line);background:#0d1b16}
+header h1{margin:0 0 5px;font-size:clamp(22px,3vw,32px)}
+header p{margin:0;color:var(--muted)}
+main{max-width:1500px;margin:auto;padding:20px;display:grid;gap:18px}
+.top-grid{display:grid;grid-template-columns:minmax(280px,350px) 1fr;gap:18px}
+.top-grid > .panel:last-child {
+  grid-column: 1 / -1;
+}
+.panel{background:rgba(20,35,30,.96);border:1px solid var(--line);border-radius:16px;padding:17px;box-shadow:0 12px 30px #0002}
+h2{font-size:18px;margin:0 0 13px}
+h3{font-size:15px;margin:0 0 9px}
+label{display:block;color:var(--muted);font-size:13px;margin:12px 0 5px}
+select,input[type=range]{width:100%}
+select,button{background:#20382e;color:var(--text);border:1px solid #426451;border-radius:9px;padding:10px;font:inherit}
+button{cursor:pointer;font-weight:650}
+button:hover{filter:brightness(1.15)}
+button.primary{background:#246b49;border-color:#3d9a6a}
+button.secondary{background:#24342d}
+button:disabled{opacity:.45;cursor:not-allowed}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.hint{font-size:12px;color:var(--muted);margin-top:8px}
+.sensor-guide{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.sensor-info{background:#102019;border:1px solid var(--line);border-radius:9px;padding:11px}
+.sensor-info b{display:block;color:#9fe0b7;margin-bottom:4px}
+.sensor-info span{display:block;color:var(--muted);font-size:13px;line-height:1.4}
+.checks{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.check{display:flex;align-items:center;gap:8px;background:#1b3028;padding:8px;border-radius:8px;color:var(--text);font-size:13px}
+.check input{accent-color:#53c887}
+.scene-wrap{position:relative;overflow:hidden;border-radius:12px;border:1px solid #3b5b47;background:#203b2c}
+canvas{display:block;width:100%;height:auto;min-height:280px}
+.scene-label{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:10px;color:var(--muted);font-size:12px}
+.legend{display:flex;gap:12px;flex-wrap:wrap}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px}
+.node-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.node{background:#182b23;border:1px solid var(--line);border-radius:12px;padding:13px;min-width:0}
+.node-head{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:9px}
+.node-head strong{font-size:14px}
+.pill{font-size:11px;padding:4px 8px;border-radius:20px;background:#284437;color:#d5e8dc;white-space:nowrap}
+.metrics{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.metric{background:#102019;border-radius:8px;padding:8px}
+.metric small{display:block;color:var(--muted);font-size:11px}
+.metric b{font-size:14px}
+.alert{margin-top:9px;padding:9px;border-radius:8px;font-weight:700;text-align:center;background:#234332;color:#b8f2cf}
+.alert.medium{background:#4c411e;color:#ffe49a}
+.alert.high{background:#512725;color:#ffc0bd}
+.alert.degraded{background:#343b40;color:#d1dce2}
+.central-grid{display:grid;grid-template-columns:1.2fr .8fr;gap:14px}
+.status-row{display:flex;gap:8px;flex-wrap:wrap}
+.status-card{background:#102019;border:1px solid var(--line);padding:10px 12px;border-radius:9px;flex:1;min-width:110px}
+.status-card small{display:block;color:var(--muted)}
+.status-card b{font-size:18px}
+.log{max-height:180px;overflow:auto;background:#0d1b15;border-radius:9px;padding:10px;font:12px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace;color:#c8dbcf}
+.log div{border-bottom:1px solid #1c3026;padding:3px 0}
+.note{border-left:3px solid var(--blue);padding:9px 12px;background:#142b35;color:#d5e8f1;border-radius:5px;font-size:13px}
+footer{color:var(--muted);font-size:12px;text-align:center;padding:4px 16px 24px}
+@media(max-width:900px){.top-grid,.central-grid{grid-template-columns:1fr}.node-grid{grid-template-columns:1fr}}
+@media(max-width:520px){.sensor-guide{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Simulador de monitoreo preventivo de senderos</h1>
+  <p>Prototipo académico interactivo · sensores virtuales · nodos ESP32 · comunicación LoRa simulada</p>
+</header>
+
+<main>
+  <section class="top-grid">
+
+    <div class="panel">
+      <h2>Configuración del escenario</h2>
+
+      <label for="scenario">Elemento que recorrerá el sendero</label>
+      <select id="scenario">
+        <optgroup label="Animales">
+          <option value="bear">Oso</option>
+          <option value="puma">Puma</option>
+          <option value="deer">Venado</option>
+          <option value="boar">Jabalí</option>
+          <option value="coyote">Coyote</option>
+          <option value="fox">Zorro</option>
+          <option value="rabbit">Conejo</option>
+          <option value="raccoon">Mapache</option>
+          <option value="livestock">Ganado</option>
+          <option value="birds">Grupo de aves</option>
+          <option value="group">Varios animales</option>
+        </optgroup>
+
+        <optgroup label="Personas y otros elementos">
+          <option value="person">Persona</option>
+          <option value="people">Grupo de personas</option>
+          <option value="bike">Ciclista</option>
+        </optgroup>
+
+        <optgroup label="Eventos ambientales simulados">
+          <option value="windEvent">Viento fuerte</option>
+          <option value="rainEvent">Lluvia intensa</option>
+          <option value="stormEvent">Tormenta eléctrica</option>
+        </optgroup>
+      </select>
+
+      <p class="hint" id="scenarioInfo">
+        El escenario representa un elemento en movimiento. Los sensores registran movimiento, distancia y sonido; no reconocen especies.
+      </p>
+
+      <label for="speed">Velocidad del recorrido: <b id="speedVal">1.0×</b></label>
+      <input id="speed" type="range" min=".5" max="2" step=".1" value="1">
+
+      <div class="checks">
+        <label class="check"><input id="wind" type="checkbox"> Ráfagas adicionales</label>
+        <label class="check"><input id="noiseOnly" type="checkbox"> Ruido sin movimiento</label>
+      </div>
+
+      <h3 style="margin-top:17px">Pruebas de funcionamiento</h3>
+
+      <div class="checks">
+        <label class="check"><input id="failPIR" type="checkbox"> Falla PIR</label>
+        <label class="check"><input id="failRCWL" type="checkbox"> Falla RCWL</label>
+        <label class="check"><input id="failUS" type="checkbox"> Falla HC-SR04</label>
+        <label class="check"><input id="failMic" type="checkbox"> Falla MAX4466</label>
+        <label class="check"><input id="loraFail" type="checkbox"> Interrumpir LoRa</label>
+      </div>
+
+      <div class="actions">
+        <button class="primary" id="start">Iniciar recorrido</button>
+        <button class="secondary" id="pause" disabled>Pausar</button>
+        <button class="secondary" id="reset">Reiniciar</button>
+      </div>
+
+      <p class="hint">
+        El tipo de animal solo identifica el escenario visual. El sistema de detección no reconoce especies.
+      </p>
+    </div>
+
+    <div class="panel">
+      <h2>¿Qué detecta cada sensor?</h2>
+
+      <div class="sensor-guide">
+        <div class="sensor-info">
+          <b>PIR</b>
+          <span>Detecta movimiento mediante cambios en la radiación infrarroja, asociados al calor de un cuerpo en movimiento.</span>
+        </div>
+
+        <div class="sensor-info">
+          <b>RCWL-0516</b>
+          <span>Detecta movimiento usando ondas de microondas; no identifica qué objeto o animal se mueve.</span>
+        </div>
+
+        <div class="sensor-info">
+          <b>HC-SR04</b>
+          <span>Mide la distancia aproximada hasta un objeto mediante ultrasonido.</span>
+        </div>
+
+        <div class="sensor-info">
+          <b>MAX4466</b>
+          <span>Capta sonido y permite estimar su intensidad relativa; no identifica sonidos ni mide decibeles calibrados.</span>
+        </div>
+      </div>
+
+      <p class="hint">
+        Los cuatro son sensores. Sus lecturas mostradas durante el recorrido son valores virtuales para probar la lógica.
+      </p>
+    </div>
+
+    <div class="panel">
+      <h2>Sendero virtual</h2>
+
+      <div class="scene-wrap">
+        <canvas id="scene" width="1000" height="440" aria-label="Escenario virtual del sendero"></canvas>
+      </div>
+
+      <div class="scene-label">
+        <span>El elemento se desplaza frente a los nodos de monitoreo.</span>
+        <span id="runStatus">Estado: detenido</span>
+
+        <div class="legend">
+          <span><i class="dot" style="background:#45cf83"></i>Bajo</span>
+          <span><i class="dot" style="background:#f2c451"></i>Medio</span>
+          <span><i class="dot" style="background:#f06b68"></i>Alto</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Módulos de monitoreo (ESP32)</h2>
+    <div class="node-grid" id="nodes"></div>
+    <p class="hint">
+      Cada nodo procesa sus sensores localmente. Las alertas locales continúan aunque se interrumpa la comunicación LoRa.
+    </p>
+  </section>
+
+  <section class="panel">
+    <h2>Estación central</h2>
+
+    <div class="central-grid">
+      <div>
+        <div class="status-row">
+          <div class="status-card">
+            <small>Nodos conectados</small>
+            <b id="connected">3 / 3</b>
+          </div>
+
+          <div class="status-card">
+            <small>Alertas medias/altas</small>
+            <b id="alerts">0</b>
+          </div>
+
+          <div class="status-card">
+            <small>Última recepción</small>
+            <b id="lastRx">—</b>
+          </div>
+        </div>
+
+        <h3 style="margin-top:15px">Últimos paquetes recibidos</h3>
+        <div class="log" id="packets">
+          <div>Esperando datos de los módulos…</div>
+        </div>
+      </div>
+
+      <div>
+        <h3>Resumen de monitoreo</h3>
+        <div class="note">
+          La estación central recibe el nivel de actividad, las lecturas y el estado de cada módulo. No identifica animales ni controla directamente los actuadores locales.
+        </div>
+
+        <p class="hint">
+          La interrupción de LoRa simula pérdida de comunicación: los nodos siguen midiendo y mostrando sus alertas locales, pero la estación deja de recibir paquetes.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="note">
+    <b>Alcance de la simulación:</b>
+    los sensores y la radio son modelos virtuales. Los escenarios de viento, lluvia y tormenta solo generan patrones virtuales de movimiento, distancia o sonido. Los sensores no identifican el clima; el ruido por sí solo no genera una alerta de movimiento. Esta herramienta permite comprobar la lógica y el flujo de datos, pero no demuestra alcances reales, precisión física, consumo energético ni desempeño en un bosque.
+  </section>
+</main>
+
+<footer>
+  Prototipo de simulación académica · No sustituye pruebas físicas ni calibración de sensores.
+</footer>
+
+<script>
+const $ = id => document.getElementById(id);
+const canvas = $("scene");
+const ctx = canvas.getContext("2d");
+const nodesEl = $("nodes");
+
+const nodes = [
+  {id:"Módulo 01",zone:"Zona A",x:230},
+  {id:"Módulo 02",zone:"Zona B",x:500},
+  {id:"Módulo 03",zone:"Zona C",x:770}
+];
+
+let running=false;
+let paused=false;
+let progress=0;
+let lastTime=0;
+let lastPacket=0;
+let packetLines=[];
+let entity=null;
+let currentData=[];
+
+const animal = {
+  bear:{name:"Oso",emoji:"🐻",noise:34,span:90,move:1.0},
+  puma:{name:"Puma",emoji:"🐈",noise:23,span:65,move:1.25},
+  deer:{name:"Venado",emoji:"🦌",noise:20,span:75,move:.95},
+  boar:{name:"Jabalí",emoji:"🐗",noise:29,span:85,move:1.1},
+  coyote:{name:"Coyote",emoji:"🐺",noise:27,span:70,move:1.2},
+  fox:{name:"Zorro",emoji:"🦊",noise:19,span:60,move:1.1},
+  rabbit:{name:"Conejo",emoji:"🐇",noise:12,span:42,move:1.5},
+  raccoon:{name:"Mapache",emoji:"🦝",noise:18,span:55,move:1.0},
+  livestock:{name:"Ganado",emoji:"🐄",noise:38,span:115,move:.8},
+  birds:{name:"Grupo de aves",emoji:"🐦",noise:31,span:95,move:1.3},
+  person:{name:"Persona",emoji:"🚶",noise:26,span:70,move:1.0},
+  people:{name:"Grupo de personas",emoji:"🚶‍♂️",noise:40,span:115,move:1.2},
+  bike:{name:"Ciclista",emoji:"🚴",noise:24,span:80,move:1.8},
+  group:{name:"Varios animales",emoji:"🐾",noise:42,span:120,move:1.45},
+
+  windEvent:{
+    name:"Viento fuerte · perturbación ambiental",
+    emoji:"💨",environmental:true,noise:42,span:0,move:1.0
+  },
+
+  rainEvent:{
+    name:"Lluvia intensa · perturbación ambiental",
+    emoji:"🌧️",environmental:true,noise:48,span:0,move:1.0
+  },
+
+  stormEvent:{
+    name:"Tormenta eléctrica · perturbación ambiental",
+    emoji:"⛈️",environmental:true,noise:60,span:0,move:1.0
+  }
+};
+
+function drawScene(){
+  const w=canvas.width;
+  const h=canvas.height;
+
+  ctx.clearRect(0,0,w,h);
+
+  const grd=ctx.createLinearGradient(0,0,0,h);
+  grd.addColorStop(0,"#294b35");
+  grd.addColorStop(1,"#142c22");
+  ctx.fillStyle=grd;
+  ctx.fillRect(0,0,w,h);
+
+  for(let i=0;i<18;i++){
+    let x=i*62-10;
+    ctx.fillStyle=i%2?"#1d3b2b":"#244632";
+    ctx.beginPath();
+    ctx.moveTo(x,40);
+    ctx.lineTo(x-38,160);
+    ctx.lineTo(x+38,160);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillRect(x-5,150,10,50);
+  }
+
+  ctx.fillStyle="#9a8968";
+  ctx.beginPath();
+  ctx.moveTo(0,235);
+  ctx.lineTo(w,205);
+  ctx.lineTo(w,345);
+  ctx.lineTo(0,370);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.strokeStyle="#c6b58e";
+  ctx.lineWidth=3;
+  ctx.setLineDash([18,16]);
+  ctx.beginPath();
+  ctx.moveTo(0,300);
+  ctx.lineTo(w,275);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  for(let i=0;i<32;i++){
+    let x=(i*97+35)%w;
+    let y=190+(i%5)*35;
+    ctx.fillStyle=i%2?"#315a37":"#3e693f";
+    ctx.beginPath();
+    ctx.arc(x,y,15+(i%3)*4,0,Math.PI*2);
+    ctx.fill();
+  }
+
+  nodes.forEach((n,i)=>{
+    ctx.strokeStyle="#77d6a0";
+    ctx.lineWidth=2;
+    ctx.setLineDash([7,6]);
+    ctx.beginPath();
+    ctx.arc(n.x,275,95,0,Math.PI*2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle="#10251b";
+    ctx.fillRect(n.x-35,90,70,42);
+
+    ctx.strokeStyle="#75c895";
+    ctx.strokeRect(n.x-35,90,70,42);
+
+    ctx.fillStyle="#e6f6e9";
+    ctx.font="bold 15px system-ui";
+    ctx.textAlign="center";
+    ctx.fillText("ESP32",n.x,116);
+
+    ctx.fillStyle="#d8e8dc";
+    ctx.font="13px system-ui";
+    ctx.fillText(n.zone,n.x,75);
+
+    ctx.strokeStyle="#9dbba4";
+    ctx.lineWidth=4;
+    ctx.beginPath();
+    ctx.moveTo(n.x,132);
+    ctx.lineTo(n.x,208);
+    ctx.stroke();
+
+    ctx.fillStyle="#263d30";
+    ctx.fillRect(n.x-17,190,34,32);
+
+    ctx.fillStyle="#8ee0ad";
+    ctx.fillRect(n.x-11,197,22,5);
+
+    ctx.fillStyle="#f0e7c8";
+    ctx.font="12px system-ui";
+    ctx.fillText("Sensores",n.x,239);
+  });
+
+  if(entity){
+    const x=progress/100*900+50;
+    const y=284-Math.sin(progress/100*Math.PI)*12;
+
+    ctx.font="48px system-ui";
+    ctx.textAlign="center";
+    ctx.fillText(entity.emoji,x,y);
+
+    ctx.fillStyle="#fff";
+    ctx.font="bold 14px system-ui";
+    ctx.fillText(entity.name,x,y-38);
+  }
+
+  ctx.textAlign="left";
+  ctx.fillStyle="#d8e9dd";
+  ctx.font="13px system-ui";
+  ctx.fillText("SENDERO BOSCOSO · REPRESENTACIÓN VIRTUAL",18,25);
+}
+
+function levelName(n){
+  return ["Bajo","Medio","Alto"][n-1]||"Sin datos";
+}
+
+function alertClass(n){
+  return n===3?"high":n===2?"medium":"";
+}
+
+function getData(index){
+  const cfg=animal[$("scenario").value];
+  const n=nodes[index];
+
+  const failP=$("failPIR").checked;
+  const failR=$("failRCWL").checked;
+  const failU=$("failUS").checked;
+  const failM=$("failMic").checked;
+
+  const x=progress/100*900+50;
+  const dist=Math.abs(x-n.x);
+
+  const environmental=!!cfg.environmental;
+  const near=!environmental && dist<cfg.span;
+  const strength=near?Math.max(0,1-dist/cfg.span):0;
+
+  const wind=$("wind").checked;
+  const noiseOnly=$("noiseOnly").checked;
+
+  let pirRaw=near && strength>.16 && !noiseOnly;
+  let rcwlRaw=near && strength>.08 && !noiseOnly;
+  let distance=near?Math.round(400-strength*350):400;
+
+  let noiseBase=environmental?cfg.noise:(near?cfg.noise*strength:0);
+
+  if(environmental && $("scenario").value==="windEvent"){
+    if(index===1){
+      rcwlRaw=true;
+      distance=250;
+    }
+  }
+
+  if(environmental && $("scenario").value!=="windEvent"){
+    pirRaw=false;
+    rcwlRaw=false;
+    distance=400;
+  }
+
+  const pir=failP?null:pirRaw;
+  const rcwl=failR?null:rcwlRaw;
+
+  let movementLevel=0;
+
+  if(pir===null&&rcwl===null){
+    movementLevel=-1;
+  }else if((pir===true&&rcwl===true)||strength>.78&&near){
+    movementLevel=3;
+  }else if(pir===true||rcwl===true){
+    movementLevel=2;
+  }else{
+    movementLevel=0;
+  }
+
+  let proximity=failU?-1:
+    distance<=150?3:
+    distance<=275?2:1;
+
+  const noise=failM?-1:
+    Math.round(noiseBase+(wind?22:0)+(noiseOnly?34:0));
+
+  let noiseLevel=failM?-1:
+    noise>45?3:
+    noise>22?2:1;
+
+  let alert=0;
+
+  if(movementLevel===-1 && proximity===-1){
+    alert=-1;
+  }else{
+    const m=movementLevel<0?0:movementLevel;
+    const pr=proximity<0?0:proximity;
+
+    if(m>=3){
+      alert=3;
+    }else if((m>=2&&pr>=3)||(m>=2&&pr>=2)||(m>=1&&pr>=3)){
+      alert=2;
+    }else if(m>=1||pr>=2){
+      alert=1;
+    }else{
+      alert=0;
+    }
+  }
+
+  const degraded=failP||failR||failU||failM;
+
+  return {
+    pir,rcwl,distance,proximity,noise,noiseLevel,
+    movementLevel,alert,degraded,near,environmental,
+    eventName:environmental?cfg.name:""
+  };
+}
+
+function sensorText(v){
+  return v===null?"Falla":v?"Movimiento":"Sin detección";
+}
+
+function levelText(v){
+  return v<0?"No disponible":
+    v===0?"Sin actividad":levelName(v);
+}
+
+function renderNodes(){
+  nodesEl.innerHTML="";
+  currentData=nodes.map((n,i)=>getData(i));
+
+  currentData.forEach((d,i)=>{
+    const el=document.createElement("div");
+    el.className="node";
+
+    const state=d.environmental
+      ?`${d.eventName} · aviso ${levelName(d.alert).toLowerCase()}`
+      :d.alert<0
+        ?"Detección no confiable"
+        :d.alert===0
+          ?"Sin actividad significativa"
+          :`Actividad ${levelName(d.alert).toLowerCase()}`;
+
+    const cls=d.alert===3?"high":
+      d.alert===2?"medium":
+      d.alert<0?"degraded":"";
+
+    el.innerHTML=`
+      <div class="node-head">
+        <strong>${nodes[i].id} · ${nodes[i].zone}</strong>
+        <span class="pill">${d.degraded?"Degradado":"Operativo"}</span>
+      </div>
+
+      <div class="metrics">
+        <div class="metric">
+          <small>PIR</small>
+          <b>${sensorText(d.pir)}</b>
+        </div>
+
+        <div class="metric">
+          <small>RCWL-0516</small>
+          <b>${sensorText(d.rcwl)}</b>
+        </div>
+
+        <div class="metric">
+          <small>HC-SR04</small>
+          <b>${d.distance} cm ${$("failUS").checked?"(falla)":""}</b>
+        </div>
+
+        <div class="metric">
+          <small>MAX4466 · RMS simulado</small>
+          <b>${d.noise<0?"No disponible":d.noise}</b>
+        </div>
+
+        <div class="metric">
+          <small>Movimiento</small>
+          <b>${levelText(d.movementLevel)}</b>
+        </div>
+
+        <div class="metric">
+          <small>Ruido relativo</small>
+          <b>${levelText(d.noiseLevel)}</b>
+        </div>
+      </div>
+
+      <div class="alert ${cls}">${state}</div>
+
+      <div class="hint">
+        LED: ${d.alert===3?"Rojo":d.alert===2?"Amarillo":"Verde"}
+        · Buzzer: ${d.alert===3?"Prolongado":d.alert===2?"Intermitente":"Apagado"}
+      </div>
+
+      ${d.environmental?'<div class="hint">Perturbación ambiental simulada mediante lecturas; los sensores no reconocen qué fenómeno la produjo.</div>':''}
+    `;
+
+    nodesEl.appendChild(el);
+  });
+
+  const connected=$("loraFail").checked?0:3;
+  $("connected").textContent=connected+" / 3";
+
+  $("alerts").textContent=
+    currentData.filter(d=>d.alert===2||d.alert===3).length;
+}
+
+function logPackets(force=false){
+  const now=Date.now();
+
+  if(!$("loraFail").checked && (force||now-lastPacket>1500)){
+    currentData.forEach((d,i)=>{
+      const line=
+        `${new Date().toLocaleTimeString()} | ${nodes[i].id} | ${nodes[i].zone} | alerta=${d.alert<0?"no confiable":levelName(Math.max(1,d.alert))} | distancia=${d.distance} cm`;
+
+      packetLines.unshift(line);
+    });
+
+    packetLines=packetLines.slice(0,18);
+    lastPacket=now;
+
+    $("lastRx").textContent=new Date().toLocaleTimeString();
+  }
+
+  $("packets").innerHTML=packetLines.length
+    ?packetLines.map(x=>`<div>${x}</div>`).join("")
+    :'<div>Sin paquetes recibidos. Comprueba el estado de LoRa.</div>';
+}
+
+function update(){
+  entity=animal[$("scenario").value];
+  const info=$("scenarioInfo");
+
+  if(entity.environmental){
+    info.textContent=
+      "El escenario ambiental no se identifica como clima: solo se simulan sus posibles efectos en movimiento, distancia o sonido. El ruido por sí solo no activa una alerta de movimiento.";
+  }else{
+    info.textContent=
+      "El escenario representa un elemento en movimiento. Los sensores registran movimiento, distancia y sonido; no reconocen especies ni identifican el objeto.";
+  }
+
+  drawScene();
+  renderNodes();
+  logPackets();
+
+  $("runStatus").textContent=
+    running?(paused?"Estado: pausado":"Estado: en ejecución")
+    :"Estado: detenido";
+}
+
+function tick(t){
+  if(!running)return;
+
+  if(!paused){
+    const dt=Math.min((t-lastTime)/1000,.06);
+    lastTime=t;
+
+    progress+=dt*8*Number($("speed").value)*entity.move;
+
+    if(progress>100){
+      progress=0;
+      packetLines.unshift("Recorrido completado · reiniciando escenario");
+      packetLines=packetLines.slice(0,18);
+    }
+
+    update();
+  }
+
+  requestAnimationFrame(tick);
+}
+
+$("start").onclick=()=>{
+  if(!running){
+    running=true;
+    paused=false;
+    progress=0;
+    entity=animal[$("scenario").value];
+    lastTime=performance.now();
+
+    $("start").disabled=true;
+    $("pause").disabled=false;
+
+    $("pause").textContent="Pausar";
+    requestAnimationFrame(tick);
+
+  }else if(paused){
+    paused=false;
+    lastTime=performance.now();
+    $("pause").textContent="Pausar";
+    requestAnimationFrame(tick);
+  }
+};
+
+$("pause").onclick=()=>{
+  paused=!paused;
+  $("pause").textContent=paused?"Continuar":"Pausar";
+  update();
+
+  if(!paused){
+    lastTime=performance.now();
+    requestAnimationFrame(tick);
+  }
+};
+
+$("reset").onclick=()=>{
+  running=false;
+  paused=false;
+  progress=0;
+  packetLines=[];
+
+  $("start").disabled=false;
+  $("pause").disabled=true;
+  $("pause").textContent="Pausar";
+
+  update();
+};
+
+$("speed").oninput=()=>{
+  $("speedVal").textContent=
+    Number($("speed").value).toFixed(1)+"×";
+};
+
+[
+  "scenario","wind","noiseOnly","failPIR",
+  "failRCWL","failUS","failMic","loraFail"
+].forEach(id=>{
+  $(id).addEventListener("change",update);
+});
+
+update();
+</script>
+</body>
+</html>
